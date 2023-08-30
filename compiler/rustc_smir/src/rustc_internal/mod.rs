@@ -8,7 +8,7 @@ use std::ops::Index;
 use std::string::ToString;
 
 use crate::rustc_internal;
-use crate::stable_mir::ReportedError;
+use crate::stable_mir::CompilerError;
 use crate::{
     rustc_smir::Tables,
     stable_mir::{self, with},
@@ -18,6 +18,7 @@ use rustc_interface::{interface, Queries};
 use rustc_middle::ty::TyCtxt;
 use rustc_session::EarlyErrorHandler;
 pub use rustc_span::def_id::{CrateNum, DefId};
+use rustc_span::ErrorGuaranteed;
 
 fn with_tables<R>(mut f: impl FnMut(&mut Tables<'_>) -> R) -> R {
     let mut ret = None;
@@ -163,27 +164,38 @@ pub(crate) fn opaque<T: Debug>(value: &T) -> Opaque {
     format!("{value:?}")
 }
 
-pub struct StableMir {
+pub struct StableMir<T: Send>
+where
+    T: Send,
+{
     args: Vec<String>,
-    callback: fn(TyCtxt<'_>),
+    callback: fn(TyCtxt<'_>) -> T,
+    result: Option<T>,
 }
 
-impl StableMir {
+impl<T> StableMir<T>
+where
+    T: Send,
+{
     /// Creates a new `StableMir` instance, with given test_function and arguments.
-    pub fn new(args: Vec<String>, callback: fn(TyCtxt<'_>)) -> Self {
-        StableMir { args, callback }
+    pub fn new(args: Vec<String>, callback: fn(TyCtxt<'_>) -> T) -> Self {
+        StableMir { args, callback, result: None }
     }
 
     /// Runs the compiler against given target and tests it with `test_function`
-    pub fn run(&mut self) -> Result<(), ReportedError> {
+    pub fn run(mut self) -> Result<T, CompilerError> {
         rustc_driver::catch_fatal_errors(|| {
-            RunCompiler::new(&self.args.clone(), self).run().unwrap();
+            RunCompiler::new(&self.args.clone(), &mut self).run().unwrap();
         })
-        .map_err(|e| e.into())
+        .map_err(|e| <ErrorGuaranteed as Into<CompilerError>>::into(e))?;
+        Ok(self.result.unwrap())
     }
 }
 
-impl Callbacks for StableMir {
+impl<T> Callbacks for StableMir<T>
+where
+    T: Send,
+{
     /// Called after analysis. Return value instructs the compiler whether to
     /// continue the compilation afterwards (defaults to `Compilation::Continue`)
     fn after_analysis<'tcx>(
@@ -193,7 +205,9 @@ impl Callbacks for StableMir {
         queries: &'tcx Queries<'tcx>,
     ) -> Compilation {
         queries.global_ctxt().unwrap().enter(|tcx| {
-            rustc_internal::run(tcx, || (self.callback)(tcx));
+            rustc_internal::run(tcx, || {
+                self.result = Some((self.callback)(tcx));
+            });
         });
         // No need to keep going.
         Compilation::Stop

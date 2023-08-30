@@ -44,7 +44,7 @@ pub type ImplTraitDecls = Vec<ImplDef>;
 
 /// An error type used to represent an error that has already been reported by the compiler.
 #[derive(Clone, Copy)]
-pub struct ReportedError(());
+pub struct CompilerError(());
 
 /// Holds information about a crate.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -162,8 +162,8 @@ pub(crate) fn with<R>(f: impl FnOnce(&mut dyn Context) -> R) -> R {
     })
 }
 
-impl From<ErrorGuaranteed> for ReportedError {
+impl From<ErrorGuaranteed> for CompilerError {
     fn from(_error: ErrorGuaranteed) -> Self {
-        ReportedError(())
+        CompilerError(())
     }
 }
