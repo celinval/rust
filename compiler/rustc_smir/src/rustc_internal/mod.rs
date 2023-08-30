@@ -8,6 +8,7 @@ use std::ops::Index;
 use std::string::ToString;
 
 use crate::rustc_internal;
+use crate::stable_mir::ReportedError;
 use crate::{
     rustc_smir::Tables,
     stable_mir::{self, with},
@@ -174,11 +175,11 @@ impl StableMir {
     }
 
     /// Runs the compiler against given target and tests it with `test_function`
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<(), ReportedError> {
         rustc_driver::catch_fatal_errors(|| {
             RunCompiler::new(&self.args.clone(), self).run().unwrap();
         })
-        .unwrap();
+        .map_err(|e| e.into())
     }
 }
 

@@ -13,6 +13,8 @@
 
 use std::cell::Cell;
 
+use rustc_span::ErrorGuaranteed;
+
 use self::ty::{
     GenericPredicates, Generics, ImplDef, ImplTrait, Span, TraitDecl, TraitDef, Ty, TyKind,
 };
@@ -39,6 +41,10 @@ pub type TraitDecls = Vec<TraitDef>;
 
 /// A list of impl trait decls.
 pub type ImplTraitDecls = Vec<ImplDef>;
+
+/// An error type used to represent an error that has already been reported by the compiler.
+#[derive(Clone, Copy)]
+pub struct ReportedError(());
 
 /// Holds information about a crate.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -154,4 +160,10 @@ pub(crate) fn with<R>(f: impl FnOnce(&mut dyn Context) -> R) -> R {
         assert!(!ptr.is_null());
         f(unsafe { *(ptr as *mut &mut dyn Context) })
     })
+}
+
+impl From<ErrorGuaranteed> for ReportedError {
+    fn from(_error: ErrorGuaranteed) -> Self {
+        ReportedError(())
+    }
 }
