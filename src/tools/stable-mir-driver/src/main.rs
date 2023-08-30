@@ -2,6 +2,7 @@
 
 #![feature(rustc_private)]
 #![feature(assert_matches)]
+#![feature(result_option_inspect)]
 
 mod sanity_checks;
 
@@ -10,9 +11,12 @@ extern crate rustc_smir;
 
 use rustc_middle::ty::TyCtxt;
 use rustc_smir::{rustc_internal, stable_mir};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::process::ExitCode;
 
 const CHECK_ARG: &str = "--check-smir";
+
+type TestResult = Result<(), String>;
 
 /// This is a wrapper that can be used to replace rustc.
 ///
@@ -29,30 +33,41 @@ fn main() -> ExitCode {
         })
         .collect();
 
-    let result = if check_smir {
+    let result: Result<_, stable_mir::CompilerError> = if check_smir {
         rustc_internal::StableMir::new(args, test_stable_mir).run()
     } else {
-        rustc_internal::StableMir::new(args, |_| {}).run()
+        rustc_internal::StableMir::new(args, |_| ExitCode::SUCCESS).run()
     };
-    if result.is_ok() { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+    if let Ok(test_result) = result { test_result } else { ExitCode::FAILURE }
 }
 
 macro_rules! run_tests {
-    ($( $test:ident($($tcx:ident)?) ),+) => {
+    ($( $test:path ),+) => {
         [$({
-            let result = $test($($tcx)?);
-            println!("Test {}: {}", stringify!($test), result.as_ref().err().unwrap_or(&"Ok".to_string()));
-            result
+            run_test(stringify!($test), || { $test() })
         },)+]
     };
 }
 
 /// This function invoke other tests and process their results.
 /// Tests should avoid panic,
-fn test_stable_mir(tcx: TyCtxt<'_>) {
-    use sanity_checks::*;
+fn test_stable_mir(tcx: TyCtxt<'_>) -> ExitCode {
+    let results = run_tests![
+        sanity_checks::test_entry_fn,
+        sanity_checks::test_all_fns,
+        sanity_checks::test_traits,
+        sanity_checks::test_crates
+    ];
+    let (success, failure): (Vec<_>, Vec<_>) = results.iter().partition(|r| r.is_ok());
+    println!("Ran {} tests. {} succeeded. {} failed", results.len(), success.len(), failure.len());
+    if failure.is_empty() { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+}
 
-    let results =
-        run_tests![test_entry_fn(), test_all_fns(), test_traits(), test_reachable_fns(tcx)];
-    results.iter().any(Result::is_err).then(|| panic!("Tests failed."));
+fn run_test<F: FnOnce() -> TestResult>(name: &str, f: F) -> TestResult {
+    let result = match catch_unwind(AssertUnwindSafe(f)) {
+        Err(_) => Err("Panic: {}".to_string()),
+        Ok(result) => result,
+    };
+    println!("Test {}: {}", name, result.as_ref().err().unwrap_or(&"Ok".to_string()));
+    result
 }
