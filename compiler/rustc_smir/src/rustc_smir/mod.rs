@@ -22,7 +22,6 @@ use tracing::debug;
 use crate::rustc_internal::IndexMap;
 
 mod alloc;
-mod builder;
 pub(crate) mod context;
 mod convert;
 

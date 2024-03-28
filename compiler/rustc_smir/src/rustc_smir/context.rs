@@ -31,7 +31,6 @@ use std::cell::RefCell;
 use std::iter;
 
 use crate::rustc_internal::RustcInternal;
-use crate::rustc_smir::builder::BodyBuilder;
 use crate::rustc_smir::{alloc, new_item_kind, smir_crate, Stable, Tables};
 
 impl<'tcx> Context for TablesWrapper<'tcx> {
@@ -455,9 +454,15 @@ impl<'tcx> Context for TablesWrapper<'tcx> {
     fn instance_body(&self, def: InstanceDef) -> Option<Body> {
         let mut tables = self.0.borrow_mut();
         let instance = tables.instances[def];
-        tables
-            .has_body(instance)
-            .then(|| BodyBuilder::new(tables.tcx, instance).build(&mut *tables))
+        tables.has_body(instance).then(|| {
+            let body = tables.tcx.instance_mir(instance.def).clone();
+            let body = tables.tcx.instantiate_and_normalize_erasing_regions(
+                instance.args,
+                ty::ParamEnv::reveal_all(),
+                ty::EarlyBinder::bind(body),
+            );
+            body.stable(&mut *tables)
+        })
     }
 
     fn instance_ty(&self, def: InstanceDef) -> stable_mir::ty::Ty {
