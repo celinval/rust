@@ -90,13 +90,14 @@ macro_rules! rtunwrap {
 // `compiler/rustc_session/src/config/sigpipe.rs`.
 #[cfg_attr(test, allow(dead_code))]
 unsafe fn init(argc: isize, argv: *const *const u8, sigpipe: u8) {
+    #[cfg_attr(target_os = "teeos", allow(unused_unsafe))]
     unsafe {
-        sys::init(argc, argv, sigpipe);
+        sys::init(argc, argv, sigpipe)
+    };
 
-        // Set up the current thread to give it the right name.
-        let thread = Thread::new_main();
-        thread::set_current(thread);
-    }
+    // Set up the current thread to give it the right name.
+    let thread = Thread::new_main();
+    thread::set_current(thread);
 }
 
 // One-time runtime cleanup.
@@ -144,6 +145,9 @@ fn lang_start_internal(
             rtabort!("drop of the panic payload panicked");
         });
     panic::catch_unwind(cleanup).map_err(rt_abort)?;
+    // Guard against multple threads calling `libc::exit` concurrently.
+    // See the documentation for `unique_thread_exit` for more information.
+    panic::catch_unwind(|| crate::sys::exit_guard::unique_thread_exit()).map_err(rt_abort)?;
     ret_code
 }
 
@@ -156,7 +160,7 @@ fn lang_start<T: crate::process::Termination + 'static>(
     sigpipe: u8,
 ) -> isize {
     let Ok(v) = lang_start_internal(
-        &move || crate::sys_common::backtrace::__rust_begin_short_backtrace(main).report().to_i32(),
+        &move || crate::sys::backtrace::__rust_begin_short_backtrace(main).report().to_i32(),
         argc,
         argv,
         sigpipe,
