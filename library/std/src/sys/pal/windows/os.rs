@@ -1,6 +1,7 @@
 //! Implementation of `std::os` functionality for Windows.
 
 #![allow(nonstandard_style)]
+#![allow(unsafe_op_in_unsafe_fn)]
 
 #[cfg(test)]
 mod tests;
@@ -17,7 +18,8 @@ use crate::ptr;
 use crate::slice;
 use crate::sys::{c, cvt};
 
-use super::{api, to_u16s};
+use super::api::{self, WinError};
+use super::to_u16s;
 
 pub fn errno() -> i32 {
     api::get_last_error().code as i32
@@ -51,10 +53,10 @@ pub fn error_string(mut errnum: i32) -> String {
         let res = c::FormatMessageW(
             flags | c::FORMAT_MESSAGE_FROM_SYSTEM | c::FORMAT_MESSAGE_IGNORE_INSERTS,
             module,
-            errnum as c::DWORD,
+            errnum as u32,
             0,
             buf.as_mut_ptr(),
-            buf.len() as c::DWORD,
+            buf.len() as u32,
             ptr::null(),
         ) as usize;
         if res == 0 {
@@ -80,7 +82,7 @@ pub fn error_string(mut errnum: i32) -> String {
 }
 
 pub struct Env {
-    base: c::LPWCH,
+    base: *mut c::WCHAR,
     iter: EnvIterator,
 }
 
@@ -125,7 +127,7 @@ impl Iterator for Env {
 }
 
 #[derive(Clone)]
-struct EnvIterator(c::LPWCH);
+struct EnvIterator(*mut c::WCHAR);
 
 impl Iterator for EnvIterator {
     type Item = (OsString, OsString);
@@ -302,16 +304,16 @@ pub fn getenv(k: &OsStr) -> Option<OsString> {
     .ok()
 }
 
-pub fn setenv(k: &OsStr, v: &OsStr) -> io::Result<()> {
+pub unsafe fn setenv(k: &OsStr, v: &OsStr) -> io::Result<()> {
     let k = to_u16s(k)?;
     let v = to_u16s(v)?;
 
-    cvt(unsafe { c::SetEnvironmentVariableW(k.as_ptr(), v.as_ptr()) }).map(drop)
+    cvt(c::SetEnvironmentVariableW(k.as_ptr(), v.as_ptr())).map(drop)
 }
 
-pub fn unsetenv(n: &OsStr) -> io::Result<()> {
+pub unsafe fn unsetenv(n: &OsStr) -> io::Result<()> {
     let v = to_u16s(n)?;
-    cvt(unsafe { c::SetEnvironmentVariableW(v.as_ptr(), ptr::null()) }).map(drop)
+    cvt(c::SetEnvironmentVariableW(v.as_ptr(), ptr::null())).map(drop)
 }
 
 pub fn temp_dir() -> PathBuf {
@@ -333,7 +335,7 @@ fn home_dir_crt() -> Option<PathBuf> {
                     buf,
                     &mut sz,
                 ) {
-                    0 if api::get_last_error().code != c::ERROR_INSUFFICIENT_BUFFER => 0,
+                    0 if api::get_last_error() != WinError::INSUFFICIENT_BUFFER => 0,
                     0 => sz,
                     _ => sz - 1, // sz includes the null terminator
                 }
@@ -358,7 +360,7 @@ fn home_dir_crt() -> Option<PathBuf> {
         super::fill_utf16_buf(
             |buf, mut sz| {
                 match c::GetUserProfileDirectoryW(token, buf, &mut sz) {
-                    0 if api::get_last_error().code != c::ERROR_INSUFFICIENT_BUFFER => 0,
+                    0 if api::get_last_error() != WinError::INSUFFICIENT_BUFFER => 0,
                     0 => sz,
                     _ => sz - 1, // sz includes the null terminator
                 }
@@ -382,7 +384,7 @@ pub fn home_dir() -> Option<PathBuf> {
 }
 
 pub fn exit(code: i32) -> ! {
-    unsafe { c::ExitProcess(code as c::UINT) }
+    unsafe { c::ExitProcess(code as u32) }
 }
 
 pub fn getpid() -> u32 {

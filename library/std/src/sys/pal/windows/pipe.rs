@@ -1,3 +1,4 @@
+#![allow(unsafe_op_in_unsafe_fn)]
 use crate::os::windows::prelude::*;
 
 use crate::ffi::OsStr;
@@ -12,6 +13,7 @@ use crate::sys::c;
 use crate::sys::fs::{File, OpenOptions};
 use crate::sys::handle::Handle;
 use crate::sys::hashmap_random_keys;
+use crate::sys::pal::windows::api::{self, WinError};
 use crate::sys_common::{FromInner, IntoInner};
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -124,20 +126,19 @@ pub fn anon_pipe(ours_readable: bool, their_handle_inheritable: bool) -> io::Res
             // testing strategy
             // For more info, see https://github.com/rust-lang/rust/pull/37677.
             if handle == c::INVALID_HANDLE_VALUE {
-                let err = io::Error::last_os_error();
-                let raw_os_err = err.raw_os_error();
+                let error = api::get_last_error();
                 if tries < 10 {
-                    if raw_os_err == Some(c::ERROR_ACCESS_DENIED as i32) {
+                    if error == WinError::ACCESS_DENIED {
                         continue;
                     } else if reject_remote_clients_flag != 0
-                        && raw_os_err == Some(c::ERROR_INVALID_PARAMETER as i32)
+                        && error == WinError::INVALID_PARAMETER
                     {
                         reject_remote_clients_flag = 0;
                         tries -= 1;
                         continue;
                     }
                 }
-                return Err(err);
+                return Err(io::Error::from_raw_os_error(error.code as i32));
             }
             ours = Handle::from_raw_handle(handle);
             break;
@@ -156,7 +157,7 @@ pub fn anon_pipe(ours_readable: bool, their_handle_inheritable: bool) -> io::Res
         opts.share_mode(0);
         let size = mem::size_of::<c::SECURITY_ATTRIBUTES>();
         let mut sa = c::SECURITY_ATTRIBUTES {
-            nLength: size as c::DWORD,
+            nLength: size as u32,
             lpSecurityDescriptor: ptr::null_mut(),
             bInheritHandle: their_handle_inheritable as i32,
         };
@@ -225,9 +226,9 @@ fn random_number() -> usize {
 // Abstracts over `ReadFileEx` and `WriteFileEx`
 type AlertableIoFn = unsafe extern "system" fn(
     BorrowedHandle<'_>,
-    c::LPVOID,
-    c::DWORD,
-    c::LPOVERLAPPED,
+    *mut core::ffi::c_void,
+    u32,
+    *mut c::OVERLAPPED,
     c::LPOVERLAPPED_COMPLETION_ROUTINE,
 ) -> c::BOOL;
 
@@ -244,7 +245,7 @@ impl AnonPipe {
 
     pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
         let result = unsafe {
-            let len = crate::cmp::min(buf.len(), c::DWORD::MAX as usize) as c::DWORD;
+            let len = crate::cmp::min(buf.len(), u32::MAX as usize) as u32;
             self.alertable_io_internal(c::ReadFileEx, buf.as_mut_ptr() as _, len)
         };
 
@@ -260,7 +261,7 @@ impl AnonPipe {
 
     pub fn read_buf(&self, mut buf: BorrowedCursor<'_>) -> io::Result<()> {
         let result = unsafe {
-            let len = crate::cmp::min(buf.capacity(), c::DWORD::MAX as usize) as c::DWORD;
+            let len = crate::cmp::min(buf.capacity(), u32::MAX as usize) as u32;
             self.alertable_io_internal(c::ReadFileEx, buf.as_mut().as_mut_ptr() as _, len)
         };
 
@@ -295,7 +296,7 @@ impl AnonPipe {
 
     pub fn write(&self, buf: &[u8]) -> io::Result<usize> {
         unsafe {
-            let len = crate::cmp::min(buf.len(), c::DWORD::MAX as usize) as c::DWORD;
+            let len = crate::cmp::min(buf.len(), u32::MAX as usize) as u32;
             self.alertable_io_internal(c::WriteFileEx, buf.as_ptr() as _, len)
         }
     }
@@ -327,8 +328,8 @@ impl AnonPipe {
     unsafe fn alertable_io_internal(
         &self,
         io: AlertableIoFn,
-        buf: c::LPVOID,
-        len: c::DWORD,
+        buf: *mut core::ffi::c_void,
+        len: u32,
     ) -> io::Result<usize> {
         // Use "alertable I/O" to synchronize the pipe I/O.
         // This has four steps.
