@@ -319,12 +319,12 @@ impl<'a> FnSig<'a> {
         defaultness: ast::Defaultness,
     ) -> FnSig<'a> {
         match *fn_kind {
-            visit::FnKind::Fn(visit::FnCtxt::Assoc(..), _, fn_sig, vis, generics, _) => {
+            visit::FnKind::Fn(visit::FnCtxt::Assoc(..), _, fn_sig, vis, generics, _, _) => {
                 let mut fn_sig = FnSig::from_method_sig(fn_sig, generics, vis);
                 fn_sig.defaultness = defaultness;
                 fn_sig
             }
-            visit::FnKind::Fn(_, _, fn_sig, vis, generics, _) => FnSig {
+            visit::FnKind::Fn(_, _, fn_sig, vis, generics, _, _) => FnSig {
                 decl,
                 generics,
                 ext: fn_sig.header.ext,
@@ -3306,6 +3306,7 @@ impl Rewrite for ast::ForeignItem {
                     defaultness,
                     ref sig,
                     ref generics,
+                    ref contract,
                     ref body,
                 } = **fn_kind;
                 if let Some(ref body) = body {
@@ -3321,6 +3322,7 @@ impl Rewrite for ast::ForeignItem {
                             sig,
                             &self.vis,
                             generics,
+                            contract,
                             Some(body),
                         ),
                         &sig.decl,
