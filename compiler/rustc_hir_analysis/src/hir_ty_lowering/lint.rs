@@ -172,7 +172,7 @@ impl<'tcx> dyn HirTyLowerer<'tcx> + '_ {
         // 2. Functions inside trait blocks
         // 3. Functions inside impl blocks
         let (sig, generics, owner) = match tcx.hir_node_by_def_id(parent_id) {
-            hir::Node::Item(hir::Item { kind: hir::ItemKind::Fn(sig, generics, _), .. }) => {
+            hir::Node::Item(hir::Item { kind: hir::ItemKind::Fn(sig, generics, _, _), .. }) => {
                 (sig, generics, None)
             }
             hir::Node::TraitItem(hir::TraitItem {

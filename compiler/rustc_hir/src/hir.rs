@@ -1427,6 +1427,12 @@ pub struct BodyId {
     pub hir_id: HirId,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, HashStable_Generic)]
+pub struct FnContractIds {
+    pub precond_hir_id: Option<HirId>,
+    pub postcond_hir_id: Option<HirId>,
+}
+
 /// The body of a function, closure, or constant value. In the case of
 /// a function, the body contains not only the function body itself
 /// (which is an expression), but also the argument patterns, since
@@ -3286,8 +3292,8 @@ impl<'hir> Item<'hir> {
         expect_const, (&'hir Ty<'hir>, &'hir Generics<'hir>, BodyId),
             ItemKind::Const(ty, generics, body), (ty, generics, *body);
 
-        expect_fn, (&FnSig<'hir>, &'hir Generics<'hir>, BodyId),
-            ItemKind::Fn(sig, generics, body), (sig, generics, *body);
+        expect_fn, (&FnSig<'hir>, &'hir Generics<'hir>, Option<&'hir FnContractIds>, BodyId),
+            ItemKind::Fn(sig, generics, contract_ids, body), (sig, generics, *contract_ids, *body);
 
         expect_macro, (&ast::MacroDef, MacroKind), ItemKind::Macro(def, mk), (def, *mk);
 
@@ -3404,7 +3410,7 @@ pub enum ItemKind<'hir> {
     /// A `const` item.
     Const(&'hir Ty<'hir>, &'hir Generics<'hir>, BodyId),
     /// A function declaration.
-    Fn(FnSig<'hir>, &'hir Generics<'hir>, BodyId),
+    Fn(FnSig<'hir>, &'hir Generics<'hir>, Option<&'hir FnContractIds>, BodyId),
     /// A MBE macro definition (`macro_rules!` or `macro`).
     Macro(&'hir ast::MacroDef, MacroKind),
     /// A module.
@@ -3457,7 +3463,7 @@ pub struct Impl<'hir> {
 impl ItemKind<'_> {
     pub fn generics(&self) -> Option<&Generics<'_>> {
         Some(match *self {
-            ItemKind::Fn(_, ref generics, _)
+            ItemKind::Fn(_, ref generics, _, _)
             | ItemKind::TyAlias(_, ref generics)
             | ItemKind::Const(_, ref generics, _)
             | ItemKind::OpaqueTy(OpaqueTy { ref generics, .. })
@@ -3644,7 +3650,7 @@ impl<'hir> OwnerNode<'hir> {
         match self {
             OwnerNode::TraitItem(TraitItem { kind: TraitItemKind::Fn(fn_sig, _), .. })
             | OwnerNode::ImplItem(ImplItem { kind: ImplItemKind::Fn(fn_sig, _), .. })
-            | OwnerNode::Item(Item { kind: ItemKind::Fn(fn_sig, _, _), .. })
+            | OwnerNode::Item(Item { kind: ItemKind::Fn(fn_sig, _, _, _), .. })
             | OwnerNode::ForeignItem(ForeignItem {
                 kind: ForeignItemKind::Fn(fn_sig, _, _), ..
             }) => Some(fn_sig),
@@ -3656,7 +3662,7 @@ impl<'hir> OwnerNode<'hir> {
         match self {
             OwnerNode::TraitItem(TraitItem { kind: TraitItemKind::Fn(fn_sig, _), .. })
             | OwnerNode::ImplItem(ImplItem { kind: ImplItemKind::Fn(fn_sig, _), .. })
-            | OwnerNode::Item(Item { kind: ItemKind::Fn(fn_sig, _, _), .. })
+            | OwnerNode::Item(Item { kind: ItemKind::Fn(fn_sig, _, _, _), .. })
             | OwnerNode::ForeignItem(ForeignItem {
                 kind: ForeignItemKind::Fn(fn_sig, _, _), ..
             }) => Some(fn_sig.decl),
@@ -3670,7 +3676,7 @@ impl<'hir> OwnerNode<'hir> {
                 kind:
                     ItemKind::Static(_, _, body)
                     | ItemKind::Const(_, _, body)
-                    | ItemKind::Fn(_, _, body),
+                    | ItemKind::Fn(_, _, _, body),
                 ..
             })
             | OwnerNode::TraitItem(TraitItem {
@@ -3847,7 +3853,7 @@ impl<'hir> Node<'hir> {
         match self {
             Node::TraitItem(TraitItem { kind: TraitItemKind::Fn(fn_sig, _), .. })
             | Node::ImplItem(ImplItem { kind: ImplItemKind::Fn(fn_sig, _), .. })
-            | Node::Item(Item { kind: ItemKind::Fn(fn_sig, _, _), .. })
+            | Node::Item(Item { kind: ItemKind::Fn(fn_sig, _, _, _), .. })
             | Node::ForeignItem(ForeignItem { kind: ForeignItemKind::Fn(fn_sig, _, _), .. }) => {
                 Some(fn_sig.decl)
             }
@@ -3877,7 +3883,7 @@ impl<'hir> Node<'hir> {
         match self {
             Node::TraitItem(TraitItem { kind: TraitItemKind::Fn(fn_sig, _), .. })
             | Node::ImplItem(ImplItem { kind: ImplItemKind::Fn(fn_sig, _), .. })
-            | Node::Item(Item { kind: ItemKind::Fn(fn_sig, _, _), .. })
+            | Node::Item(Item { kind: ItemKind::Fn(fn_sig, _, _, _), .. })
             | Node::ForeignItem(ForeignItem { kind: ForeignItemKind::Fn(fn_sig, _, _), .. }) => {
                 Some(fn_sig)
             }
@@ -3979,7 +3985,7 @@ impl<'hir> Node<'hir> {
     pub fn fn_kind(self) -> Option<FnKind<'hir>> {
         match self {
             Node::Item(i) => match i.kind {
-                ItemKind::Fn(ref sig, ref generics, _) => {
+                ItemKind::Fn(ref sig, ref generics, _, _) => {
                     Some(FnKind::ItemFn(i.ident, generics, sig.header))
                 }
                 _ => None,

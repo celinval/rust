@@ -968,6 +968,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         ..
                     },
                     hir::Generics { params, predicates, .. },
+                    _,
                     _body_id,
                 ),
             ..

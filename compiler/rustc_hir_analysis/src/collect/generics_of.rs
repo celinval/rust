@@ -229,7 +229,7 @@ pub(super) fn generics_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Generics {
                 // inherit the generics of the item.
                 Some(parent.to_def_id())
             }
-            ItemKind::Fn(sig, _, _) => {
+            ItemKind::Fn(sig, _, _, _) => {
                 // For a delegation item inherit generics from callee.
                 if let Some(sig_id) = sig.decl.opt_delegation_sig_id()
                     && let Some(generics) =

@@ -165,7 +165,7 @@ fn gather_explicit_predicates_of(tcx: TyCtxt<'_>, def_id: LocalDefId) -> ty::Gen
                 is_trait = Some(self_bounds);
             }
 
-            ItemKind::Fn(sig, _, _) => {
+            ItemKind::Fn(sig, _, _, _) => {
                 // For a delegation item inherit predicates from callee.
                 if let Some(sig_id) = sig.decl.opt_delegation_sig_id()
                     && let Some(predicates) =
