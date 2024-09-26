@@ -149,7 +149,7 @@ impl<'tcx> LateLintPass<'tcx> for ImplicitHasher {
                     );
                 }
             },
-            ItemKind::Fn(ref sig, generics, body_id) => {
+            ItemKind::Fn(ref sig, generics, _, body_id) => {
                 let body = cx.tcx.hir().body(body_id);
 
                 for ty in sig.decl.inputs {

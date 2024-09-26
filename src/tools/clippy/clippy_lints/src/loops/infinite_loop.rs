@@ -69,7 +69,7 @@ fn get_parent_fn_ret_ty<'tcx>(cx: &LateContext<'tcx>, expr: &Expr<'_>) -> Option
     for (_, parent_node) in cx.tcx.hir().parent_iter(expr.hir_id) {
         match parent_node {
             Node::Item(hir::Item {
-                kind: hir::ItemKind::Fn(FnSig { decl, .. }, _, _),
+                kind: hir::ItemKind::Fn(FnSig { decl, .. }, _, _, _),
                 ..
             })
             | Node::TraitItem(hir::TraitItem {
