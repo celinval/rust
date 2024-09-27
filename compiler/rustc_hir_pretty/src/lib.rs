@@ -362,6 +362,7 @@ impl<'a> State<'a> {
                     generics,
                     arg_names,
                     None,
+                    None,
                 );
                 self.end(); // end head-ibox
                 self.word(";");
@@ -521,7 +522,7 @@ impl<'a> State<'a> {
                 self.word(";");
                 self.end(); // end the outer cbox
             }
-            hir::ItemKind::Fn(ref sig, generics, _fn_contract_ids, body) => {
+            hir::ItemKind::Fn(ref sig, generics, fn_contract_ids, body) => {
                 self.head("");
                 self.print_fn(
                     sig.decl,
@@ -529,6 +530,7 @@ impl<'a> State<'a> {
                     Some(item.ident.name),
                     generics,
                     &[],
+                    fn_contract_ids,
                     Some(body),
                 );
                 self.word(" ");
@@ -787,7 +789,7 @@ impl<'a> State<'a> {
         arg_names: &[Ident],
         body_id: Option<hir::BodyId>,
     ) {
-        self.print_fn(m.decl, m.header, Some(ident.name), generics, arg_names, body_id);
+        self.print_fn(m.decl, m.header, Some(ident.name), generics, arg_names, None, body_id);
     }
 
     fn print_trait_item(&mut self, ti: &hir::TraitItem<'_>) {
@@ -1937,6 +1939,7 @@ impl<'a> State<'a> {
         name: Option<Symbol>,
         generics: &hir::Generics<'_>,
         arg_names: &[Ident],
+        fn_contract_ids: Option<&hir::FnContractIds>,
         body_id: Option<hir::BodyId>,
     ) {
         self.print_fn_header_info(header);
@@ -1977,6 +1980,7 @@ impl<'a> State<'a> {
         self.pclose();
 
         self.print_fn_output(decl);
+        if let Some(contract_ids) = fn_contract_ids { self.print_contracts(contract_ids); }
         self.print_where_clause(generics)
     }
 
@@ -2144,6 +2148,15 @@ impl<'a> State<'a> {
         self.print_ident(lifetime.ident)
     }
 
+    fn print_contracts(&mut self, fn_contract_ids: &hir::FnContractIds) {
+        if let Some(precond) = fn_contract_ids.precond {
+            self.ann.nested(self, Nested::Body(precond));
+        }
+        if let Some(postcond) = fn_contract_ids.postcond {
+            self.ann.nested(self, Nested::Body(postcond));
+        }
+    }
+
     fn print_where_clause(&mut self, generics: &hir::Generics<'_>) {
         if generics.predicates.is_empty() {
             return;
@@ -2257,6 +2270,7 @@ impl<'a> State<'a> {
             name,
             generics,
             arg_names,
+            None,
             None,
         );
         self.end();
