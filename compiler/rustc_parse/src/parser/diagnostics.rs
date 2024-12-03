@@ -488,6 +488,14 @@ impl<'a> Parser<'a> {
             .expected_tokens
             .iter()
             .filter(|token| {
+                // If the expected token is an internal implementation artifact (e.g. result of a builtin attribute desugaring),
+                // then do not suggest it.
+                if let TokenType::Keyword(kw::RustcContractEnsures | kw::RustcContractRequires) =
+                    token
+                {
+                    return false;
+                }
+
                 // Filter out suggestions that suggest the same token which was found and deemed incorrect.
                 fn is_ident_eq_keyword(found: &TokenKind, expected: &TokenType) -> bool {
                     if let TokenKind::Ident(current_sym, _) = found
