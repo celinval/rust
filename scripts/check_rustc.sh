@@ -51,7 +51,8 @@ echo "$COMMIT_ID for rustc is"
 # Get the full commit ID for shallow clone
 curl -H "Connection: close" -o "${TMP_RUST_DIR}/output.json" -s --show-error \
     "https://api.github.com/repos/rust-lang/rust/commits?sha=${COMMIT_ID}&per_page=1"
-COMMIT_ID=$(jq -r '.[0].sha' "${TMP_RUST_DIR}/output.json")
+
+COMMIT_ID=$(cat "${TMP_RUST_DIR}/output.json" | jq -r '.[0].sha')
 
 # Clone the rust-lang/rust repository
 echo "Cloning rust-lang/rust repository into ${TMP_RUST_DIR}..."

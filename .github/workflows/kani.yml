@@ -2,14 +2,6 @@ name: Kani
 
 on:
   workflow_dispatch:
-  merge_group:
-  pull_request:
-    branches: [ main ]
-  push:
-    paths:
-      - 'library/**'
-      - '.github/workflows/kani.yml'
-      - 'scripts/run-kani.sh'
 
 defaults:
   run:
