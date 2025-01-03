@@ -46,13 +46,13 @@ cd "$REPO_DIR"
 # Get the commit ID from rustc --version
 echo "Retrieving commit ID..."
 COMMIT_ID=$(rustc --version | sed -e "s/.*(\(.*\) .*/\1/")
-echo "$COMMIT_ID for rustc is"
 
 # Get the full commit ID for shallow clone
+echo "Full commit id for $COMMIT_ID for is:"
 curl -H "Connection: close" -o "${TMP_RUST_DIR}/output.json" -s --show-error \
     "https://api.github.com/repos/rust-lang/rust/commits?sha=${COMMIT_ID}&per_page=1"
-
 COMMIT_ID=$(cat "${TMP_RUST_DIR}/output.json" | jq -r '.[0].sha')
+echo "- $COMMIT_ID"
 
 # Clone the rust-lang/rust repository
 echo "Cloning rust-lang/rust repository into ${TMP_RUST_DIR}..."
@@ -75,6 +75,8 @@ cp -r "${REPO_DIR}/library" "${TMP_RUST_DIR}"
 pushd "${TMP_RUST_DIR}"
 ./configure --set=llvm.download-ci-llvm=true
 export RUSTFLAGS="--check-cfg cfg(kani) --check-cfg cfg(feature,values(any()))"
+export RUST_BACKTRACE=1
+unset GITHUB_ACTIONS # Bootstrap script requires specific repo layout when run from an action. Disable that.
 
 # Run tidy
 if [ "${TIDY_MODE}" == "--bless" ];
