@@ -1095,7 +1095,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             // ==>
             // { rustc_contract_requires(PRECOND); { body } }
             let Some(contract) = opt_contract else { return (params, result) };
-
+            let result_ref = this.arena.alloc(result);
             let lit_unit = |this: &mut LoweringContext<'_, 'hir>| {
                 this.expr(contract.span, hir::ExprKind::Tup(&[]))
             };
@@ -1130,26 +1130,22 @@ impl<'hir> LoweringContext<'_, 'hir> {
                         this.arena.alloc(checker_binding_pat),
                         hir::LocalSource::Contract,
                     ),
-                    {
-                        let checker_fn = this.expr_ident(ens.span, fresh_ident.0, fresh_ident.2);
-                        let span =
-                            this.mark_span_with_reason(DesugaringKind::Contract, ens.span, None);
-                        this.expr_call_mut(
-                            span,
-                            checker_fn,
-                            std::slice::from_ref(this.arena.alloc(result)),
-                        )
-                    },
+                    this.inject_ensures_check(
+                        result_ref,
+                        ens.span,
+                        fresh_ident.0,
+                        fresh_ident.2,
+                    ),
                 )
             } else {
                 let u = lit_unit(this);
-                (this.stmt_expr(contract.span, u), result)
+                (this.stmt_expr(contract.span, u), &*result_ref)
             };
 
             let block = this.block_all(
                 contract.span,
                 arena_vec![this; precond, postcond_checker],
-                Some(this.arena.alloc(result)),
+                Some(result),
             );
             (params, this.expr_block(block))
         })
