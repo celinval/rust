@@ -1093,7 +1093,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
             // { body }
             // ==>
-            // { rustc_contract_requires(PRECOND); { body } }
+            // { contract_requires(PRECOND); { body } }
             let Some(contract) = opt_contract else { return (params, result) };
             let result_ref = this.arena.alloc(result);
             let lit_unit = |this: &mut LoweringContext<'_, 'hir>| {
