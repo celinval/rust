@@ -2260,6 +2260,8 @@ options! {
          Multiple options can be combined with commas."),
     layout_seed: Option<u64> = (None, parse_opt_number, [TRACKED],
         "seed layout randomization"),
+    lazy_codegen: bool = (false, parse_bool, [TRACKED],
+        "Do not include object code in the rlib. Instead store the entire MIR (default: no)"),
     link_directives: bool = (true, parse_bool, [TRACKED],
         "honor #[link] directives in the compiled crate (default: yes)"),
     link_native_libraries: bool = (true, parse_bool, [UNTRACKED],

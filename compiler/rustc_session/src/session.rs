@@ -745,6 +745,17 @@ impl Session {
         }
     }
 
+    /// Return whether to encode MIR of all functions into the crate metadata
+    pub fn always_encode_mir(&self) -> bool {
+        self.opts.unstable_opts.always_encode_mir || self.opts.unstable_opts.lazy_codegen
+    }
+
+    /// Delay codegen stage to building crates that need their object file.
+    /// I.e.: bin, dylib, cdylib, staticlib, and proc-macro targets.
+    pub fn lazy_codegen(&self) -> bool {
+        self.opts.unstable_opts.lazy_codegen
+    }
+
     pub fn must_emit_unwind_tables(&self) -> bool {
         // This is used to control the emission of the `uwtable` attribute on
         // LLVM functions.

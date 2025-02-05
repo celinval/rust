@@ -803,6 +803,7 @@ fn test_unstable_options_tracking_hash() {
     tracked!(inline_mir_threshold, Some(123));
     tracked!(instrument_mcount, true);
     tracked!(instrument_xray, Some(InstrumentXRay::default()));
+    tracked!(lazy_codegen, true);
     tracked!(link_directives, false);
     tracked!(link_only, true);
     tracked!(lint_llvm_ir, true);
