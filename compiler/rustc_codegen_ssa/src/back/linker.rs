@@ -836,11 +836,14 @@ impl<'a> Linker for GccLinker<'a> {
             self.link_arg("-M").link_arg(path);
         } else if is_windows {
             self.link_arg(path);
-        } else {
-            let mut arg = OsString::from("--version-script=");
-            arg.push(path);
-            self.link_arg(arg).link_arg("--no-undefined-version");
         }
+        // FIXME(celina): We need to tweak to ensure all exported symbols are included in the
+        // final .so file.
+        // else {
+        //let mut arg = OsString::from("--version-script=");
+        //arg.push(path);
+        //self.link_arg(arg).link_arg("--no-undefined-version");
+        //}
     }
 
     fn subsystem(&mut self, subsystem: &str) {

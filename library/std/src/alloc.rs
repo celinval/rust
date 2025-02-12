@@ -392,6 +392,7 @@ pub mod __default_lib_allocator {
     // linkage directives are provided as part of the current compiler allocator
     // ABI
 
+    #[rustc_diagnostic_item = "__rdl_alloc"]
     #[rustc_std_internal_symbol]
     pub unsafe extern "C" fn __rdl_alloc(size: usize, align: usize) -> *mut u8 {
         // SAFETY: see the guarantees expected by `Layout::from_size_align` and
@@ -402,6 +403,7 @@ pub mod __default_lib_allocator {
         }
     }
 
+    #[rustc_diagnostic_item = "__rdl_dealloc"]
     #[rustc_std_internal_symbol]
     pub unsafe extern "C" fn __rdl_dealloc(ptr: *mut u8, size: usize, align: usize) {
         // SAFETY: see the guarantees expected by `Layout::from_size_align` and
@@ -409,6 +411,7 @@ pub mod __default_lib_allocator {
         unsafe { System.dealloc(ptr, Layout::from_size_align_unchecked(size, align)) }
     }
 
+    #[rustc_diagnostic_item = "__rdl_realloc"]
     #[rustc_std_internal_symbol]
     pub unsafe extern "C" fn __rdl_realloc(
         ptr: *mut u8,
@@ -424,6 +427,7 @@ pub mod __default_lib_allocator {
         }
     }
 
+    #[rustc_diagnostic_item = "__rdl_alloc_zeroed"]
     #[rustc_std_internal_symbol]
     pub unsafe extern "C" fn __rdl_alloc_zeroed(size: usize, align: usize) -> *mut u8 {
         // SAFETY: see the guarantees expected by `Layout::from_size_align` and

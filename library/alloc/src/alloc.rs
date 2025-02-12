@@ -424,6 +424,7 @@ pub use std::alloc::handle_alloc_error;
 pub mod __alloc_error_handler {
     // called via generated `__rust_alloc_error_handler` if there is no
     // `#[alloc_error_handler]`.
+    #[rustc_diagnostic_item = "__rdl_oom"]
     #[rustc_std_internal_symbol]
     pub unsafe fn __rdl_oom(size: usize, _align: usize) -> ! {
         extern "Rust" {

@@ -232,6 +232,7 @@ use rustc_middle::util::Providers;
 use rustc_middle::{bug, span_bug};
 use rustc_session::Limit;
 use rustc_session::config::EntryFnType;
+use rustc_span::def_id::LOCAL_CRATE;
 use rustc_span::source_map::{Spanned, dummy_spanned, respan};
 use rustc_span::{DUMMY_SP, Span};
 use tracing::{debug, instrument, trace};
@@ -958,6 +959,29 @@ fn should_codegen_locally<'tcx>(tcx: TyCtxt<'tcx>, instance: Instance<'tcx>) -> 
         return true;
     };
 
+    // FIXME: How can we tell if this is part of the standard library??
+    let crate_name = tcx.crate_name(instance.def_id().krate);
+    let is_std = ["std", "core", "alloc", "hashbrown", "std_detect", "proc_macro"]
+        .contains(&crate_name.to_string().as_str());
+    if tcx.sess.lazy_codegen() && !is_std {
+        let collect = if let DefKind::Static { .. } = tcx.def_kind(def_id) {
+            tracing::info!(
+                "Static: {def_id:?} (mir_available: {:?})",
+                tcx.is_mir_available(def_id)
+            );
+            true
+        } else {
+            tracing::info!(
+                "Codegen: {def_id:?} (mir_available: {:?})",
+                tcx.is_mir_available(def_id)
+            );
+            tcx.is_mir_available(def_id)
+        };
+        // For lazy codegen, we collect everything that is reachable from the entry point(s).
+        // Note that we early exit if the crate type that is being compiled doesn't need the objs.
+        return !tcx.is_foreign_item(def_id) && collect;
+    }
+
     if tcx.is_foreign_item(def_id) {
         // Foreign items are always linked against, there's no way of instantiating them.
         return false;
@@ -1222,6 +1246,7 @@ fn collect_items_of_instance<'tcx>(
     mode: CollectionMode,
 ) -> (MonoItems<'tcx>, MonoItems<'tcx>) {
     // This item is getting monomorphized, do mono-time checks.
+    tracing::info!(?instance, ?mode, "collect_items_of_instance...");
     tcx.ensure_ok().check_mono_item(instance);
 
     let body = tcx.instance_mir(instance.def);
@@ -1668,6 +1693,15 @@ pub(crate) fn collect_crate_mono_items<'tcx>(
     tcx: TyCtxt<'tcx>,
     strategy: MonoItemCollectionStrategy,
 ) -> (Vec<MonoItem<'tcx>>, UsageMap<'tcx>) {
+    use rustc_session::config::CrateType;
+    if tcx.sess.lazy_codegen() && tcx.crate_types().iter().all(|typ| *typ == CrateType::Rlib) {
+        // If we are in the `alloc` crate, we need to include the allocation functions:
+        // __rust_no_alloc_error_handler / __rust_alloc / __rust_dealloc ...
+        tracing::warn!(name=?tcx.crate_name(LOCAL_CRATE), "collect_crate_mono_items skip");
+        // We skip codegen if just producing rlib.
+        return (vec![], UsageMap::new());
+    }
+    tracing::warn!(name=?tcx.crate_name(LOCAL_CRATE), types=?tcx.crate_types(), "collect_crate_mono_items codegen");
     let _prof_timer = tcx.prof.generic_activity("monomorphization_collector");
 
     let roots = tcx
@@ -1707,6 +1741,15 @@ pub(crate) fn collect_crate_mono_items<'tcx>(
         state.visited.into_inner().into_sorted(hcx, true)
     });
 
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    let name = tcx.crate_name(LOCAL_CRATE);
+    let mut outfile = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&format!("/tmp/lazy/{name}.log"))
+        .unwrap();
+    write!(outfile, "{mono_items:#?}").unwrap();
     (mono_items, state.usage_map.into_inner())
 }
 
